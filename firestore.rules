@@ -1,0 +1,230 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - username: string (required, < 50 chars)
+    //   - avatar_url: string (optional, < 500 chars)
+    //   - total_votes: number (required, >= 0)
+    //   - win_rate: number (required, >= 0, <= 1)
+    //   - correct_predictions: number (required, >= 0)
+    //   - insight_score: number (required, >= 0)
+    //   - title: string (optional, < 100 chars)
+    //   - status: string (required, 'ACTIVE' or 'BANNED')
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: newsItems
+    // Document ID: auto-generated
+    // Fields:
+    //   - submitter_id: string (required, immutable)
+    //   - raw_content: string (required, < 1000 chars)
+    //   - summary: string (optional, < 100 chars)
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: topics
+    // Document ID: auto-generated
+    // Fields:
+    //   - news_id: string (required, immutable)
+    //   - statement: string (required, < 200 chars)
+    //   - category: string (required, < 50 chars)
+    //   - image_keyword: string (optional, < 100 chars)
+    //   - agree_count: number (required, >= 0)
+    //   - disagree_count: number (required, >= 0)
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: votes
+    // Document ID: auto-generated (or user_id + topic_id)
+    // Fields:
+    //   - user_id: string (required, immutable)
+    //   - topic_id: string (required, immutable)
+    //   - stance: string (required, 'AGREE' or 'DISAGREE')
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= minLen &&
+             request.resource.data[field].size() <= maxLen;
+    }
+
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    function isPositiveNumber(field) {
+      return request.resource.data[field] is number && request.resource.data[field] >= 0;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser() {
+      return hasOnlyAllowedFields(['username', 'avatar_url', 'total_votes', 'insight_score', 'title', 'status', 'tag_weights', 'createdAt']) &&
+             isValidString('username', 1, 50) &&
+             isValidOptionalString('avatar_url', 0, 2000) &&
+             isPositiveNumber('total_votes') &&
+             isPositiveNumber('insight_score') &&
+             isValidOptionalString('title', 0, 100) &&
+             (!('tag_weights' in request.resource.data) || request.resource.data.tag_weights is map) &&
+             request.resource.data.status in ['ACTIVE', 'BANNED'] &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    function isValidNewsItem() {
+      return hasOnlyAllowedFields(['submitter_id', 'raw_content', 'summary', 'createdAt']) &&
+             request.resource.data.submitter_id == request.auth.uid &&
+             isValidString('raw_content', 1, 1000) &&
+             isValidOptionalString('summary', 0, 100) &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    function isValidTopic() {
+      return hasOnlyAllowedFields(['news_id', 'statement', 'category', 'hook', 'perspective_agree', 'perspective_disagree', 'image_keyword', 'tags', 'agree_count', 'disagree_count', 'controversy_score', 'elo_score', 'news_summary', 'createdAt']) &&
+             isValidString('news_id', 1, 100) &&
+             isValidString('statement', 1, 200) &&
+             isValidString('category', 1, 50) &&
+             isValidOptionalString('hook', 0, 500) &&
+             isValidOptionalString('perspective_agree', 0, 500) &&
+             isValidOptionalString('perspective_disagree', 0, 500) &&
+             isValidOptionalString('image_keyword', 0, 100) &&
+             isValidOptionalString('news_summary', 0, 200) &&
+             (!('tags' in request.resource.data) || request.resource.data.tags is list) &&
+             isPositiveNumber('agree_count') &&
+             isPositiveNumber('disagree_count') &&
+             request.resource.data.controversy_score is number && request.resource.data.controversy_score >= 0 &&
+             (!('elo_score' in request.resource.data) || request.resource.data.elo_score is number) &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    function isValidVote() {
+      return hasOnlyAllowedFields(['user_id', 'topic_id', 'stance', 'createdAt']) &&
+             request.resource.data.user_id == request.auth.uid &&
+             isValidString('topic_id', 1, 100) &&
+             request.resource.data.stance in ['AGREE', 'DISAGREE'] &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    function isValidInvestment() {
+      return hasOnlyAllowedFields(['user_id', 'topic_id', 'amount', 'createdAt']) &&
+             request.resource.data.user_id == request.auth.uid &&
+             isValidString('topic_id', 1, 100) &&
+             request.resource.data.amount is number && request.resource.data.amount > 0 &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    function isValidNotification() {
+      return hasOnlyAllowedFields(['user_id', 'title', 'message', 'type', 'read', 'actionUrl', 'createdAt']) &&
+             isValidString('user_id', 1, 100) &&
+             isValidString('title', 1, 100) &&
+             isValidString('message', 1, 500) &&
+             isValidString('type', 1, 50) &&
+             request.resource.data.read is bool &&
+             isValidOptionalString('actionUrl', 0, 500) &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    function isValidUnlockedSoulmate() {
+      return hasOnlyAllowedFields(['user_id', 'soulmate_id', 'cost', 'createdAt']) &&
+             request.resource.data.user_id == request.auth.uid &&
+             isValidString('soulmate_id', 1, 100) &&
+             request.resource.data.cost is number && request.resource.data.cost >= 0 &&
+             (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated(); // Public profiles for leaderboard
+      allow create: if isOwner(userId) && isValidUser() &&
+                       request.resource.data.total_votes == 0 &&
+                       request.resource.data.insight_score == 0 &&
+                       request.resource.data.status == 'ACTIVE';
+      allow update: if isOwner(userId) && isValidUser() &&
+                       (!('createdAt' in resource.data) || !(resource.data.createdAt is timestamp) || request.resource.data.createdAt == resource.data.createdAt) &&
+                       (!('status' in resource.data) || !(resource.data.status in ['ACTIVE', 'BANNED']) ? request.resource.data.status == 'ACTIVE' : request.resource.data.status == resource.data.status);
+    }
+
+    match /newsItems/{newsId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidNewsItem();
+      allow update: if false; // News items are immutable
+      allow delete: if false;
+    }
+
+    match /topics/{topicId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTopic() &&
+                       request.resource.data.agree_count == 0 &&
+                       request.resource.data.disagree_count == 0 &&
+                       request.resource.data.controversy_score == 0;
+      allow update: if isAuthenticated() && isValidTopic() &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['agree_count', 'disagree_count', 'controversy_score']) &&
+                       // Only allow incrementing agree or disagree by 1
+                       (
+                         (request.resource.data.agree_count == resource.data.get('agree_count', 0) + 1 && request.resource.data.disagree_count == resource.data.get('disagree_count', 0)) ||
+                         (request.resource.data.disagree_count == resource.data.get('disagree_count', 0) + 1 && request.resource.data.agree_count == resource.data.get('agree_count', 0))
+                       );
+      allow delete: if false;
+    }
+
+    match /votes/{voteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidVote() &&
+                       !exists(/databases/$(database)/documents/votes/$(request.auth.uid + '_' + request.resource.data.topic_id));
+      allow update: if false; // Votes are immutable
+      allow delete: if false;
+    }
+
+    match /investments/{investmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidInvestment();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && isValidNotification(); // Server or client can create
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+                       request.resource.data.read == true;
+      allow delete: if false;
+    }
+
+    match /unlocked_soulmates/{unlockedId} {
+      allow read: if isAuthenticated() && (resource.data.user_id == request.auth.uid || resource.data.soulmate_id == request.auth.uid);
+      allow create: if isAuthenticated() && isValidUnlockedSoulmate();
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

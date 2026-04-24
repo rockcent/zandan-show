@@ -1,0 +1,227 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application.",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "User's display name."
+        },
+        "avatar_url": {
+          "type": "string",
+          "description": "URL to the user's avatar image."
+        },
+        "total_votes": {
+          "type": "number",
+          "description": "Total number of votes cast by the user."
+        },
+        "insight_score": {
+          "type": "number",
+          "description": "User's insight score."
+        },
+        "title": {
+          "type": "string",
+          "description": "AI generated title for the user."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ACTIVE", "BANNED"],
+          "description": "User account status for shadowbanning."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the user was created."
+        }
+      },
+      "required": ["username", "total_votes", "insight_score", "createdAt"]
+    },
+    "NewsItem": {
+      "title": "NewsItem",
+      "description": "A news item or statement submitted by a user.",
+      "type": "object",
+      "properties": {
+        "submitter_id": {
+          "type": "string",
+          "description": "The UID of the user who submitted the news."
+        },
+        "raw_content": {
+          "type": "string",
+          "description": "The raw text or URL submitted."
+        },
+        "summary": {
+          "type": "string",
+          "description": "A short summary of the news item."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the news item was created."
+        }
+      },
+      "required": ["submitter_id", "raw_content", "createdAt"]
+    },
+    "Topic": {
+      "title": "Topic",
+      "description": "An AI-generated controversial topic based on a NewsItem.",
+      "type": "object",
+      "properties": {
+        "news_id": {
+          "type": "string",
+          "description": "The ID of the parent NewsItem."
+        },
+        "statement": {
+          "type": "string",
+          "description": "The controversial statement."
+        },
+        "category": {
+          "type": "string",
+          "description": "The category of the topic."
+        },
+        "hook": {
+          "type": "string",
+          "description": "A 1-2 sentence hook summarizing the core conflict."
+        },
+        "perspective_agree": {
+          "type": "string",
+          "description": "The core perspective of the agreeing side."
+        },
+        "perspective_disagree": {
+          "type": "string",
+          "description": "The core perspective of the disagreeing side."
+        },
+        "image_keyword": {
+          "type": "string",
+          "description": "A highly concrete visual noun for image search."
+        },
+        "agree_count": {
+          "type": "number",
+          "description": "Number of users who agree."
+        },
+        "disagree_count": {
+          "type": "number",
+          "description": "Number of users who disagree."
+        },
+        "controversy_score": {
+          "type": "number",
+          "description": "Calculated score representing how controversial the topic is."
+        },
+        "sentiment_prediction": {
+          "type": "string",
+          "description": "Prediction of the overall sentiment or potential outcome based on user votes and other factors."
+        },
+        "news_summary": {
+          "type": "string",
+          "description": "Short summary of the news item this topic is based on."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the topic was created."
+        }
+      },
+      "required": ["news_id", "statement", "agree_count", "disagree_count", "controversy_score", "createdAt"]
+    },
+    "Vote": {
+      "title": "Vote",
+      "description": "A user's vote on a Topic.",
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "The UID of the user who voted."
+        },
+        "topic_id": {
+          "type": "string",
+          "description": "The ID of the topic voted on."
+        },
+        "stance": {
+          "type": "string",
+          "enum": ["AGREE", "DISAGREE"],
+          "description": "The user's stance."
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "When the vote was cast."
+        }
+      },
+      "required": ["user_id", "topic_id", "stance", "createdAt"]
+    },
+    "Investment": {
+      "title": "Investment",
+      "description": "A user's investment in a Topic.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "topic_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["user_id", "topic_id", "amount", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A push notification for a user.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "read": { "type": "boolean" },
+        "actionUrl": { "type": "string" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["user_id", "title", "message", "type", "read", "createdAt"]
+    },
+    "UnlockedSoulmate": {
+      "title": "UnlockedSoulmate",
+      "description": "A record of a user unlocking a soulmate's profile.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "soulmate_id": { "type": "string" },
+        "cost": { "type": "number" },
+        "createdAt": { "type": "timestamp" }
+      },
+      "required": ["user_id", "soulmate_id", "cost", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Stores user profiles."
+    },
+    "newsItems/{newsId}": {
+      "schema": {
+        "$ref": "#/entities/NewsItem"
+      },
+      "description": "Stores submitted news items."
+    },
+    "topics/{topicId}": {
+      "schema": {
+        "$ref": "#/entities/Topic"
+      },
+      "description": "Stores AI-generated topics."
+    },
+    "votes/{voteId}": {
+      "schema": {
+        "$ref": "#/entities/Vote"
+      },
+      "description": "Stores user votes."
+    },
+    "investments/{investmentId}": {
+      "schema": { "$ref": "#/entities/Investment" },
+      "description": "Stores user topic investments."
+    },
+    "notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Stores user notifications."
+    },
+    "unlocked_soulmates/{unlockedId}": {
+      "schema": { "$ref": "#/entities/UnlockedSoulmate" },
+      "description": "Stores unlocked soulmate relationships."
+    }
+  }
+}
